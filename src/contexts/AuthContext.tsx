@@ -22,122 +22,78 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Usuários simulados expandidos
-const mockUsers: User[] = [
-  {
-    id: '1',
-    name: 'João Silva',
-    email: 'cliente@homeseek.com',
-    role: 'cliente',
-    company: 'Particular',
-    phone: '(47) 99999-0001',
-    isActive: true
-  },
-  {
-    id: '2',
-    name: 'Maria Santos',
-    email: 'corretor@homeseek.com',
-    role: 'corretor',
-    company: 'Imobiliária Prime',
-    phone: '(47) 99999-0002',
-    isActive: true
-  },
-  {
-    id: '3',
-    name: 'Carlos Pereira',
-    email: 'imobiliaria@homeseek.com',
-    role: 'imobiliaria',
-    company: 'Imobiliária Litoral',
-    phone: '(47) 99999-0003',
-    isActive: true
-  },
-  {
-    id: '4',
-    name: 'Ana Costa',
-    email: 'construtora@homeseek.com',
-    role: 'construtora',
-    company: 'Construtora Atlântico',
-    phone: '(47) 99999-0004',
-    isActive: true
-  },
-  {
-    id: '5',
-    name: 'Roberto Admin',
-    email: 'admin@homeseek.com',
-    role: 'admin',
-    company: 'HomeSeek',
-    phone: '(47) 99999-0005',
-    isActive: true
-  },
-  {
-    id: '6',
-    name: 'Patricia Incorporadora',
-    email: 'incorporadora@homeseek.com',
-    role: 'incorporadora',
-    company: 'Grupo Incorporador SC',
-    phone: '(47) 99999-0006',
-    isActive: true
-  },
-  {
-    id: '7',
-    name: 'Fernando Corretor',
-    email: 'fernando.corretor@homeseek.com',
-    role: 'corretor',
-    company: 'Corretora Premium',
-    phone: '(47) 99999-0007',
-    isActive: true
-  }
-];
+import { supabase } from '../lib/supabaseClient';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Simular verificação de sessão
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (error) {
-        console.error('Erro ao carregar usuário salvo:', error);
-        localStorage.removeItem('user');
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setIsLoading(true);
+      if (event === 'SIGNED_IN' && session) {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (error) {
+          console.error('Erro ao buscar perfil do usuário:', error);
+          setUser(null);
+        } else {
+          setUser(profile as User);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
       }
-    }
-    setIsLoading(false);
+      setIsLoading(false);
+    });
+
+    // Verifica a sessão inicial
+    const checkInitialSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        
+        if (error) {
+          console.error('Erro ao buscar perfil na sessão inicial:', error);
+        } else {
+          setUser(profile as User);
+        }
+      }
+      setIsLoading(false);
+    };
+
+    checkInitialSession();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
-    
-    try {
-      // Simular delay de autenticação
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Verificar credenciais (senha padrão: 123456)
-      const foundUser = mockUsers.find(u => u.email === email && u.isActive);
-      
-      if (foundUser && password === '123456') {
-        setUser(foundUser);
-        localStorage.setItem('user', JSON.stringify(foundUser));
-        console.log('Login realizado com sucesso:', foundUser);
-        return true;
-      }
-      
-      console.log('Credenciais inválidas');
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setIsLoading(false);
+
+    if (error) {
+      console.error('Erro no login:', error.message);
       return false;
-    } catch (error) {
-      console.error('Erro no login:', error);
-      return false;
-    } finally {
-      setIsLoading(false);
     }
+    // O listener onAuthStateChange cuidará de definir o usuário
+    return true;
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('user');
-    console.log('Logout realizado');
+  const logout = async () => {
+    setIsLoading(true);
+    await supabase.auth.signOut();
+    // O listener onAuthStateChange cuidará de limpar o usuário
+    setIsLoading(false);
   };
 
   return (
