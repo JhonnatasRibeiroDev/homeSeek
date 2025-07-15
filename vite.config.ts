@@ -1,4 +1,3 @@
-
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -10,10 +9,13 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
   },
+  preview: {
+    port: 3006,
+    allowedHosts: ["homeseek.mywarning.top"], // 👈 aqui adiciona seu domínio
+  },
   plugins: [
     react(),
-    mode === 'development' &&
-    componentTagger(),
+    mode === "development" && componentTagger(),
   ].filter(Boolean),
   base: "/imovelcenter",
   resolve: {
@@ -22,3 +24,4 @@ export default defineConfig(({ mode }) => ({
     },
   },
 }));
+
